@@ -1,0 +1,18 @@
+# Arquivos de sistema e IDEs
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.log
+
+# Build e Dependências (Genérico)
+dist/
+build/
+bin/
+obj/
+node_modules/
+vendor/
+__pycache__/
+*.egg-info/
+.env
+.env.local
