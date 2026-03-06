@@ -1,65 +1,168 @@
-# [Nome do SDK] - Arara SDK
+# Arara Python SDK
 
-Este repositório contém o SDK oficial da Arara para **[Linguagem/Plataforma]**.
+O SDK oficial da Arara para Python. Esta biblioteca permite integrar facilmente as funcionalidades de mensageria (WhatsApp), gestão de templates, inteligência artificial (Brain), campanhas e pagamentos diretamente no seu aplicativo ou servidor.
 
-> **Nota para o mantenedor:** Este é um template base. Ao usar este repositório, substitua as informações entre colchetes `[...]` pelas informações específicas do seu projeto.
+---
 
-## 📋 Sobre
+## 🚀 Destaques (Features)
 
-Descreva brevemente o que este SDK faz e quais serviços da Arara ele cobre.
+- **Suporte Nativo a Async/Sync**: Escolha entre operações bloqueantes ou assíncronas (`httpx` baseado).
+- **Type Safety**: Utiliza **Pydantic V2** para validação rigorosa de dados e suporte total a autocompletar em IDEs.
+- **Resiliência**: Lógica de **Retries** automática com backoff exponencial integrada.
+- **Tratamento de Erros Profissional**: Hierarquia de exceções clara para cada status HTTP relevante.
+- **Arquitetura Modular**: Recursos organizados por domínio (Messages, Templates, Brain, etc).
 
-## 🚀 Instalação
+---
 
-Instruções de como instalar o SDK na linguagem específica.
+## 📦 Instalação
 
-Exemplo genérico:
 ```bash
-# Comando de instalação
-install-command [package-name]
+pip install arara-api-sdk
 ```
 
-## ⚡ Começando
+> **Nota:** Requer Python 3.8 ou superior.
 
-Exemplo rápido de "Hello World" ou uso básico da biblioteca.
+---
 
-```[linguagem]
-// Insira aqui um exemplo de código
-initialize(apiKey);
-doSomething();
+## 🔑 Autenticação
+
+A autenticação é feita via **Bear API Key**. Você pode obter sua chave no painel da Arara.
+
+O SDK busca automaticamente a variável de ambiente `ARARA_API_KEY` caso nenhuma chave seja passada no construtor.
+
+```bash
+export ARARA_API_KEY="ara_live_..."
 ```
 
-## 📂 Estrutura do Projeto
+---
 
-Explique brevemente como o código está organizado.
+## 🛠️ Uso Rápido (Quick Start)
 
-*   `src/` ou `lib/`: Código fonte.
-*   `tests/`: Testes automatizados.
-*   `docs/`: Documentação adicional.
-*   `examples/`: Projetos de exemplo.
+### Modo Síncrono (Standard)
+Ideal para scripts simples ou servidores que não utilizam async/await.
 
-## 🤝 Como Contribuir
+```python
+from arara_api_sdk import AraraClient
+from arara_api_sdk.models.message import SendMessageRequest
 
-Agradecemos o interesse em contribuir com o ecossistema Arara! Este projeto segue um fluxo de contribuição padrão para garantir a qualidade e consistência.
+# O uso de Context Manager garante que os recursos sejam fechados corretamente
+with AraraClient(api_key="your_api_key") as client:
+    request = SendMessageRequest(
+        receiver="5511999999999",
+        body="Hello World from Arara SDK!"
+    )
+    response = client.messages.send(request)
+    print(f"Message ID: {response.id} | Status: {response.status}")
+```
 
-### Fluxo de Trabalho (Workflow)
+### Modo Assíncrono (High Performance)
+Recomendado para aplicações FastAPI, aiohttp ou volumes massivos de dados.
 
-1.  **Fork** este repositório para a sua conta pessoal ou organização.
-2.  Crie uma **Branch** para a sua feature ou correção:
-    *   Use nomes descritivos, ex: `feat/nova-autenticacao`, `fix/erro-timeout`.
-3.  Faça suas alterações e **Commits**:
-    *   Escreva mensagens de commit claras e concisas (preferencialmente em inglês ou português, seguindo o padrão do projeto).
-4.  Faça o **Push** para o seu fork.
-5.  Abra um **Pull Request (PR)** para o repositório principal:
-    *   Descreva detalhadamente o que foi feito.
-    *   Linke issues relacionadas, se houver.
-    *   Aguarde a revisão da equipe.
+```python
+import asyncio
+from arara_api_sdk import AraraClient
+from arara_api_sdk.models.message import SendMessageRequest
 
-### Padrões de Código
+async def send_bulk():
+    async with AraraClient() as client:
+        request = SendMessageRequest(
+            receiver="5511999999999",
+            template_name="welcome_message",
+            variables=["Amos"]
+        )
+        response = await client.messages.send_async(request)
+        print(f"Async Sent: {response.id}")
 
-*   Siga as convenções de estilo da linguagem (ex: PEP8 para Python, StandardJS para JS/TS, Go Fmt para Go).
-*   Mantenha a cobertura de testes. Se adicionar uma nova funcionalidade, adicione testes para ela.
-*   Documente métodos e classes públicas.
+asyncio.run(send_bulk())
+```
+
+---
+
+## 📂 Visão Geral dos Módulos
+
+### 💬 Mensagens (Messages)
+Envio de mensagens de texto simples ou baseadas em templates aprovados.
+```python
+client.messages.send(request)
+client.messages.get(message_id)
+```
+
+### 📝 Templates
+Gestão completa do ciclo de vida de modelos de mensagem do WhatsApp.
+```python
+client.templates.list()
+client.templates.create(create_request)
+client.templates.get_status(template_id)
+```
+
+### 🧠 AI Brain
+Interface direta com o motor de Inteligência Artificial da Arara.
+```python
+response = client.brain.prompt(BrainRequest(prompt="Como configurar meu webhook?"))
+print(response.answer)
+```
+
+### 🏢 Organizações & Webhooks
+Gestão de membros, números de telefone e configuração de webhooks de recebimento.
+```python
+webhook = client.organizations.get_webhook()
+members = client.organizations.list_members()
+```
+
+---
+
+## ⚙️ Configuração Avançada
+
+Você pode customizar o comportamento do HttpClient no momento da inicialização:
+
+```python
+client = AraraClient(
+    api_key="...",
+    timeout=60.0,       # Custom timeout in seconds
+    max_retries=5,      # Exponential backoff retries
+    base_url="https://..." # Custom API endpoint
+)
+```
+
+---
+
+## ⚠️ Tratamento de Erros (Error Handling)
+
+O SDK mapeia erros da API para exceções Python específicas:
+
+```python
+from arara_api_sdk.exceptions import (
+    AraraAuthError, 
+    AraraValidationError, 
+    AraraResourceNotFoundError
+)
+
+try:
+    client.messages.send(request)
+except AraraAuthError:
+    # Error 401
+    pass
+except AraraResourceNotFoundError:
+    # Error 404
+    pass
+except AraraValidationError as e:
+    # Error 400 - Validation details are in e.response_body
+    print(e.response_body)
+```
+
+---
+
+## 👩‍💻 Desenvolvimento e Testes
+
+Se você deseja contribuir ou rodar os testes localmente:
+
+1. Crie um ambiente virtual: `python -m venv .venv`
+2. Ative: `source .venv/bin/activate`
+3. Instale as dependências: `pip install -e ".[test]"`
+4. Rode os testes: `pytest tests/`
+
+---
 
 ## 📄 Licença
 
-Este projeto está licenciado sob a [Licença MIT](LICENSE).
+Distribuído sob a licença MIT. Veja `LICENSE` para mais informações.
