@@ -12,6 +12,7 @@ class SendMessageRequest(BaseModel):
     smart_link_param: Optional[str] = Field(None, alias="smartLinkParam")
     smart_link_url: Optional[str] = Field(None, alias="smartLinkUrl")
     body: Optional[str] = None
+    media_url: Optional[str] = Field(None, alias="media_url")
     scheduled_at: Optional[datetime] = Field(None, alias="scheduled_at")
     mode: Optional[str] = None  # LIVE or TEST
 

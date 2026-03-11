@@ -3,8 +3,8 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "arara_api_sdk"
-version = "0.1.0"
+name = "ararahq-sdk"
+version = "1.8.0"
 description = "Official Python SDK for the Arara API"
 readme = "README.md"
 requires-python = ">=3.8"

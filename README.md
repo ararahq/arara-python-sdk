@@ -17,7 +17,7 @@ O SDK oficial da Arara para Python. Esta biblioteca permite integrar facilmente 
 ## 📦 Instalação
 
 ```bash
-pip install arara-api-sdk
+pip install ararahq-sdk
 ```
 
 > **Nota:** Requer Python 3.8 ou superior.
@@ -49,7 +49,8 @@ from arara_api_sdk.models.message import SendMessageRequest
 with AraraClient(api_key="your_api_key") as client:
     request = SendMessageRequest(
         receiver="5511999999999",
-        body="Hello World from Arara SDK!"
+        body="Hello World from Arara SDK!",
+        media_url="https://ararahq.com/l/FtFmja" # Opcional: Anexo
     )
     response = client.messages.send(request)
     print(f"Message ID: {response.id} | Status: {response.status}")
@@ -68,7 +69,8 @@ async def send_bulk():
         request = SendMessageRequest(
             receiver="5511999999999",
             template_name="welcome_message",
-            variables=["Amos"]
+            variables=["Amos"],
+            scheduled_at="2024-12-25T10:00:00Z" # Opcional: Agendamento ISO8601
         )
         response = await client.messages.send_async(request)
         print(f"Async Sent: {response.id}")
