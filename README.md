@@ -1,6 +1,11 @@
 # Arara Python SDK
 
-O SDK oficial da Arara para Python. Esta biblioteca permite integrar facilmente as funcionalidades de mensageria (WhatsApp), gestão de templates, inteligência artificial (Brain), campanhas e pagamentos diretamente no seu aplicativo ou servidor.
+[![PyPI](https://img.shields.io/pypi/v/ararahq-sdk)](https://pypi.org/project/ararahq-sdk/)
+[![Python](https://img.shields.io/badge/Python-3.8%2B-blue)](https://www.python.org/)
+[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![Docs](https://img.shields.io/badge/Docs-docs.ararahq.com-orange)](https://docs.ararahq.com)
+
+O SDK oficial da [AraraHQ](https://ararahq.com) para Python. Esta biblioteca permite integrar facilmente as funcionalidades de mensageria (WhatsApp), gestão de templates, inteligência artificial (Brain), campanhas e pagamentos diretamente no seu aplicativo ou servidor.
 
 ---
 
