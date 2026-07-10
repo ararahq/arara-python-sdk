@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ararahq-sdk"
-version = "1.8.0"
+version = "1.8.1"
 description = "Official Python SDK for the Arara API"
 readme = "README.md"
 requires-python = ">=3.8"
 license = { text = "MIT" }
 authors = [
-    { name = "Arara", email = "contact@arara.io" },
+    { name = "Arara", email = "suporte@ararahq.com" },
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
