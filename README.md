@@ -31,7 +31,7 @@ pip install ararahq-sdk
 
 ## 🔑 Autenticação
 
-A autenticação é feita via **Bear API Key**. Você pode obter sua chave no painel da Arara.
+A autenticação é feita via **Bearer API Key**. Você pode obter sua chave no painel da Arara.
 
 O SDK busca automaticamente a variável de ambiente `ARARA_API_KEY` caso nenhuma chave seja passada no construtor.
 
@@ -106,7 +106,7 @@ client.templates.get_status(template_id)
 Interface direta com o motor de Inteligência Artificial da Arara.
 ```python
 response = client.brain.prompt(BrainRequest(prompt="Como configurar meu webhook?"))
-print(response.answer)
+print(response.text)
 ```
 
 ### 🏢 Organizações & Webhooks
