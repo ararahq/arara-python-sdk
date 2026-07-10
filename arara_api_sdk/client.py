@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 from arara_api_sdk.config import SDKConfig
 from arara_api_sdk.http.client import HttpClient
 from arara_api_sdk.resources.message import MessageResource
@@ -29,8 +29,8 @@ class AraraClient:
         Args:
             api_key: The Arara API Key. If not provided, will look for the 
                 ARARA_API_KEY environment variable.
-            base_url: The base URL for the Arara API. Defaults to 
-                https://api.arara.io.
+            base_url: The base URL for the Arara API. Defaults to
+                https://api.ararahq.com.
             timeout: Request timeout in seconds. Defaults to 30.0.
             max_retries: Maximum number of request retries. Defaults to 3.
         """
