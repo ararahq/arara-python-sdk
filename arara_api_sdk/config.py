@@ -5,7 +5,7 @@ from pydantic import Field
 class SDKConfig(BaseSettings):
     """SDK Configuration settings."""
     api_key: str = Field(..., env="ARARA_API_KEY")
-    base_url: str = Field("https://api.arara.io", env="ARARA_BASE_URL")
+    base_url: str = Field("https://api.ararahq.com", env="ARARA_BASE_URL")
     timeout: float = Field(30.0, env="ARARA_TIMEOUT")
     max_retries: int = Field(3, env="ARARA_MAX_RETRIES")
 

@@ -1,16 +1,17 @@
 import logging
-import time
 from typing import Any, Dict, Optional, Type, TypeVar, Union
 
 import httpx
-from pydantic import BaseModel, parse_obj_as
+from pydantic import BaseModel
 from tenacity import (
-    retry,
+    AsyncRetrying,
+    Retrying,
+    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
-    retry_if_exception_type,
 )
 
+from arara_api_sdk._version import __version__
 from arara_api_sdk.config import SDKConfig
 from arara_api_sdk.exceptions import (
     AraraAuthError,
@@ -27,6 +28,8 @@ T = TypeVar("T", bound=BaseModel)
 
 logger = logging.getLogger("arara_sdk")
 
+RETRYABLE_EXCEPTIONS = (httpx.ConnectError, httpx.TimeoutException, AraraServerError)
+
 class HttpClient:
     """Internal HTTP client for Arara API with sync and async support."""
 
@@ -35,7 +38,13 @@ class HttpClient:
         self._headers = {
             "Content-Type": "application/json",
             "Authorization": f"Bearer {self.config.api_key}",
-            "User-Agent": "Arara-Python-SDK/0.1.0",
+            "User-Agent": f"Arara-Python-SDK/{__version__}",
+        }
+        self._retry_config: Dict[str, Any] = {
+            "retry": retry_if_exception_type(RETRYABLE_EXCEPTIONS),
+            "wait": wait_exponential(multiplier=1, min=2, max=10),
+            "stop": stop_after_attempt(self.config.max_retries + 1),
+            "reraise": True,
         }
         self.sync_client = httpx.Client(
             base_url=self.config.base_url,
@@ -47,6 +56,17 @@ class HttpClient:
             headers=self._headers,
             timeout=self.config.timeout,
         )
+
+    @staticmethod
+    def _parse_retry_after(response: httpx.Response) -> Optional[int]:
+        """Parse the Retry-After header as seconds, if present and numeric."""
+        header = response.headers.get("Retry-After")
+        if header is None:
+            return None
+        try:
+            return int(header)
+        except ValueError:
+            return None
 
     def _handle_response(self, response: httpx.Response) -> httpx.Response:
         """Handle HTTP response and raise appropriate exceptions."""
@@ -68,18 +88,39 @@ class HttpClient:
         elif status_code == 404:
             raise AraraResourceNotFoundError(message, status_code, error_data)
         elif status_code == 429:
-            raise AraraRateLimitError(message, status_code, error_data)
+            raise AraraRateLimitError(
+                message,
+                status_code,
+                error_data,
+                retry_after=self._parse_retry_after(response),
+            )
         elif 500 <= status_code < 600:
             raise AraraServerError(message, status_code, error_data)
         else:
             raise AraraError(f"HTTP {status_code}: {message}", status_code, error_data)
 
-    @retry(
-        retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException, AraraServerError)),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        stop=stop_after_attempt(3),
-        reraise=True,
-    )
+    def _parse_body(
+        self,
+        response: httpx.Response,
+        response_model: Optional[Type[T]],
+    ) -> Union[T, Dict[str, Any], None]:
+        """Deserialize the response body into the requested model or dict."""
+        if response.status_code == 204:
+            return None
+        if response_model:
+            return response_model.model_validate(response.json())
+        return response.json()
+
+    def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Send a synchronous request and raise for error statuses."""
+        response = self.sync_client.request(method, path, **kwargs)
+        return self._handle_response(response)
+
+    async def _asend(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
+        """Send an asynchronous request and raise for error statuses."""
+        response = await self.async_client.request(method, path, **kwargs)
+        return self._handle_response(response)
+
     def request(
         self,
         method: str,
@@ -87,26 +128,15 @@ class HttpClient:
         response_model: Optional[Type[T]] = None,
         **kwargs,
     ) -> Union[T, Dict[str, Any], None]:
-        """Perform a synchronous HTTP request."""
+        """Perform a synchronous HTTP request with retries on timeout, connection and 5xx errors."""
         try:
-            response = self.sync_client.request(method, path, **kwargs)
-            self._handle_response(response)
-            
-            if response_model and response.status_code != 204:
-                return response_model.model_validate(response.json())
-            return response.json() if response.status_code != 204 else None
-            
+            response = Retrying(**self._retry_config)(self._send, method, path, **kwargs)
         except httpx.TimeoutException as e:
             raise AraraTimeoutError("Request timed out") from e
         except httpx.RequestError as e:
             raise AraraConnectionError(f"Connection error: {str(e)}") from e
+        return self._parse_body(response, response_model)
 
-    @retry(
-        retry=retry_if_exception_type((httpx.ConnectError, httpx.TimeoutException, AraraServerError)),
-        wait=wait_exponential(multiplier=1, min=2, max=10),
-        stop=stop_after_attempt(3),
-        reraise=True,
-    )
     async def arequest(
         self,
         method: str,
@@ -114,19 +144,16 @@ class HttpClient:
         response_model: Optional[Type[T]] = None,
         **kwargs,
     ) -> Union[T, Dict[str, Any], None]:
-        """Perform an asynchronous HTTP request."""
+        """Perform an asynchronous HTTP request with retries on timeout, connection and 5xx errors."""
         try:
-            response = await self.async_client.request(method, path, **kwargs)
-            self._handle_response(response)
-            
-            if response_model and response.status_code != 204:
-                return response_model.model_validate(response.json())
-            return response.json() if response.status_code != 204 else None
-
+            response = await AsyncRetrying(**self._retry_config)(
+                self._asend, method, path, **kwargs
+            )
         except httpx.TimeoutException as e:
             raise AraraTimeoutError("Request timed out") from e
         except httpx.RequestError as e:
             raise AraraConnectionError(f"Connection error: {str(e)}") from e
+        return self._parse_body(response, response_model)
 
     def close(self):
         """Close the synchronous client."""

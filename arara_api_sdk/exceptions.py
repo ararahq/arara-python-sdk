@@ -22,7 +22,15 @@ class AraraValidationError(AraraError):
 
 class AraraRateLimitError(AraraError):
     """Raised when rate limit is exceeded (429)."""
-    pass
+    def __init__(
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        response_body: Optional[Dict[str, Any]] = None,
+        retry_after: Optional[int] = None,
+    ):
+        super().__init__(message, status_code, response_body)
+        self.retry_after = retry_after
 
 class AraraResourceNotFoundError(AraraError):
     """Raised when a resource is not found (404)."""
