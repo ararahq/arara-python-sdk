@@ -8,12 +8,12 @@ from arara_api_sdk.exceptions import AraraResourceNotFoundError
 def test_send_message_success(arara_client, respx_mock):
     """Test successful message sending."""
     # Arrange
-    request = SendMessageRequest(receiver="5511999999999", body="Hello")
+    request = SendMessageRequest(receiver="whatsapp:+5511987654321", body="Hello")
     response_data = {
         "id": "msg_123",
         "status": "SENT",
         "mode": "LIVE",
-        "receiver": "5511999999999",
+        "receiver": "whatsapp:+5511987654321",
         "body": "Hello",
         "cost": "0.05"
     }
@@ -42,12 +42,12 @@ def test_get_message_not_found_raises_exception(arara_client, respx_mock):
 async def test_send_message_async_success(arara_client, respx_mock):
     """Test successful asynchronous message sending."""
     # Arrange
-    request = SendMessageRequest(receiver="5511999999999", body="Hello Async")
+    request = SendMessageRequest(receiver="whatsapp:+5511987654321", body="Hello Async")
     response_data = {
         "id": "msg_async_123",
         "status": "QUEUED",
-        "mode": "TEST",
-        "receiver": "5511999999999",
+        "mode": "LIVE",
+        "receiver": "whatsapp:+5511987654321",
         "body": "Hello Async",
         "cost": "0.00"
     }
@@ -58,4 +58,4 @@ async def test_send_message_async_success(arara_client, respx_mock):
     
     # Assert
     assert response.id == "msg_async_123"
-    assert response.mode == "TEST"
+    assert response.mode == "LIVE"
