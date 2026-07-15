@@ -30,7 +30,7 @@ class AraraClient:
             api_key: The Arara API Key. If not provided, will look for the 
                 ARARA_API_KEY environment variable.
             base_url: The base URL for the Arara API. Defaults to
-                https://api.ararahq.com.
+                https://api.ararahq.com/api.
             timeout: Request timeout in seconds. Defaults to 30.0.
             max_retries: Maximum number of request retries. Defaults to 3.
         """

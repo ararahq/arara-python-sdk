@@ -53,7 +53,7 @@ from arara_api_sdk.models.message import SendMessageRequest
 # O uso de Context Manager garante que os recursos sejam fechados corretamente
 with AraraClient(api_key="your_api_key") as client:
     request = SendMessageRequest(
-        receiver="5511999999999",
+        receiver="whatsapp:+5511987654321",
         body="Hello World from Arara SDK!",
         media_url="https://ararahq.com/l/FtFmja" # Opcional: Anexo
     )
@@ -72,9 +72,9 @@ from arara_api_sdk.models.message import SendMessageRequest
 async def send_bulk():
     async with AraraClient() as client:
         request = SendMessageRequest(
-            receiver="5511999999999",
+            receiver="whatsapp:+5511987654321",
             template_name="welcome_message",
-            variables=["Amos"],
+            template_variables=["Amos"],
             scheduled_at="2024-12-25T10:00:00Z" # Opcional: Agendamento ISO8601
         )
         response = await client.messages.send_async(request)

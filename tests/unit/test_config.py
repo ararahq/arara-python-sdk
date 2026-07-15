@@ -26,6 +26,6 @@ def test_config_default_values():
     config = SDKConfig(api_key="test_key")
     
     # Assert
-    assert config.base_url == "https://api.ararahq.com"
+    assert config.base_url == "https://api.ararahq.com/api"
     assert config.timeout == 30.0
     assert config.max_retries == 3
