@@ -8,6 +8,12 @@ from arara_api_sdk.resources.user import UserResource
 from arara_api_sdk.resources.brain import BrainResource
 from arara_api_sdk.resources.campaign import CampaignResource
 from arara_api_sdk.resources.payment import PaymentResource
+from arara_api_sdk.resources.contact import ContactResource
+from arara_api_sdk.resources.conversation import ConversationResource
+from arara_api_sdk.resources.wallet import WalletResource
+from arara_api_sdk.resources.number import NumberResource
+from arara_api_sdk.resources.smart_link import SmartLinkResource
+from arara_api_sdk.resources.api_key import ApiKeyResource
 
 class AraraClient:
     """
@@ -52,6 +58,12 @@ class AraraClient:
         self.brain = BrainResource(self._http)
         self.campaigns = CampaignResource(self._http)
         self.payments = PaymentResource(self._http)
+        self.contacts = ContactResource(self._http)
+        self.conversations = ConversationResource(self._http)
+        self.wallet = WalletResource(self._http)
+        self.numbers = NumberResource(self._http)
+        self.smart_links = SmartLinkResource(self._http)
+        self.api_keys = ApiKeyResource(self._http)
 
     def close(self) -> None:
         """Closes the internal synchronous HTTP client."""
