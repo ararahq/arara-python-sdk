@@ -153,9 +153,15 @@ except AraraResourceNotFoundError:
     # Error 404
     pass
 except AraraValidationError as e:
-    # Error 400 - Validation details are in e.response_body
-    print(e.response_body)
+    # Error 400 - o envelope { "error": { "code", "message", "details" } }
+    # vem desempacotado em e.code, str(e) e e.details
+    print(e.code, e.details)
 ```
+
+Erros 429 sao repetidos automaticamente respeitando o header `Retry-After`
+(ou backoff exponencial, quando ausente), ate `max_retries`. Se o servidor
+pedir uma espera maior que 60s, o SDK levanta `AraraRateLimitError` na hora
+com `e.retry_after` preenchido, em vez de bloquear a chamada.
 
 ---
 

@@ -1,12 +1,12 @@
 import logging
-from typing import Any, Dict, Optional, Type, TypeVar, Union
+from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
 
 import httpx
 from pydantic import BaseModel
 from tenacity import (
     AsyncRetrying,
+    RetryCallState,
     Retrying,
-    retry_if_exception_type,
     stop_after_attempt,
     wait_exponential,
 )
@@ -15,25 +15,69 @@ from arara_api_sdk._version import __version__
 from arara_api_sdk.config import SDKConfig
 from arara_api_sdk.exceptions import (
     AraraAuthError,
-    AraraValidationError,
+    AraraConnectionError,
+    AraraError,
     AraraRateLimitError,
     AraraResourceNotFoundError,
     AraraServerError,
-    AraraConnectionError,
     AraraTimeoutError,
-    AraraError,
+    AraraValidationError,
 )
 
 T = TypeVar("T", bound=BaseModel)
 
 logger = logging.getLogger("arara_sdk")
 
-RETRYABLE_EXCEPTIONS = (httpx.ConnectError, httpx.TimeoutException, AraraServerError)
+RETRYABLE_EXCEPTIONS = (
+    httpx.ConnectError,
+    httpx.TimeoutException,
+    AraraServerError,
+    AraraRateLimitError,
+)
+
+MAX_RETRY_AFTER_SECONDS = 60
+UNKNOWN_ERROR_MESSAGE = "Unknown error"
+
+_EXPONENTIAL_BACKOFF = wait_exponential(multiplier=1, min=2, max=10)
+
+
+def _exception_from(retry_state: RetryCallState) -> Optional[BaseException]:
+    """Return the exception raised by the last attempt, if it failed."""
+    outcome = retry_state.outcome
+    if outcome is None or not outcome.failed:
+        return None
+    return outcome.exception()
+
+
+def _should_retry(retry_state: RetryCallState) -> bool:
+    """Retry transport errors, 5xx and 429.
+
+    A 429 whose Retry-After exceeds the cap is not worth sleeping on: retrying
+    earlier than the server asked just burns an attempt, and blocking the caller
+    for that long is worse than surfacing the error.
+    """
+    exception = _exception_from(retry_state)
+    if isinstance(exception, AraraRateLimitError):
+        return (
+            exception.retry_after is None
+            or exception.retry_after <= MAX_RETRY_AFTER_SECONDS
+        )
+    return isinstance(exception, RETRYABLE_EXCEPTIONS)
+
+
+def _wait_strategy(retry_state: RetryCallState) -> float:
+    """Honor Retry-After on 429, fall back to exponential backoff."""
+    exception = _exception_from(retry_state)
+    if isinstance(exception, AraraRateLimitError) and exception.retry_after is not None:
+        return float(exception.retry_after)
+    return _EXPONENTIAL_BACKOFF(retry_state)
+
 
 class HttpClient:
     """Internal HTTP client for Arara API with sync and async support."""
 
     def __init__(self, config: SDKConfig):
+        """Build the sync and async httpx clients and the shared retry policy."""
         self.config = config
         self._headers = {
             "Content-Type": "application/json",
@@ -41,8 +85,8 @@ class HttpClient:
             "User-Agent": f"Arara-Python-SDK/{__version__}",
         }
         self._retry_config: Dict[str, Any] = {
-            "retry": retry_if_exception_type(RETRYABLE_EXCEPTIONS),
-            "wait": wait_exponential(multiplier=1, min=2, max=10),
+            "retry": _should_retry,
+            "wait": _wait_strategy,
             "stop": stop_after_attempt(self.config.max_retries + 1),
             "reraise": True,
         }
@@ -64,9 +108,40 @@ class HttpClient:
         if header is None:
             return None
         try:
-            return int(header)
+            return max(int(header.strip()), 0)
         except ValueError:
             return None
+
+    @staticmethod
+    def _parse_error_envelope(
+        error_data: Any,
+    ) -> Tuple[Optional[str], str, Dict[str, Any]]:
+        """Extract code, message and details from an API error body.
+
+        The Arara envelope is ``{"error": {"code", "message", "details"}}``.
+        Bodies where ``error``/``message`` carry a bare string are still
+        accepted, so older deployments and non-JSON responses keep working.
+        """
+        if not isinstance(error_data, dict):
+            return None, str(error_data) or UNKNOWN_ERROR_MESSAGE, {}
+
+        envelope = error_data.get("error")
+        source: Dict[str, Any] = envelope if isinstance(envelope, dict) else error_data
+
+        code = source.get("code")
+        details = source.get("details")
+
+        message = source.get("message")
+        if not isinstance(message, str) or not message:
+            message = envelope if isinstance(envelope, str) else None
+        if not isinstance(message, str) or not message:
+            message = UNKNOWN_ERROR_MESSAGE
+
+        return (
+            code if isinstance(code, str) else None,
+            message,
+            details if isinstance(details, dict) else {},
+        )
 
     def _handle_response(self, response: httpx.Response) -> httpx.Response:
         """Handle HTTP response and raise appropriate exceptions."""
@@ -79,25 +154,31 @@ class HttpClient:
         except Exception:
             error_data = {"error": response.text}
 
-        message = error_data.get("error") or error_data.get("message") or "Unknown error"
+        code, message, details = self._parse_error_envelope(error_data)
 
         if status_code == 401:
-            raise AraraAuthError(message, status_code, error_data)
+            raise AraraAuthError(message, status_code, error_data, code, details)
         elif status_code == 400:
-            raise AraraValidationError(message, status_code, error_data)
+            raise AraraValidationError(message, status_code, error_data, code, details)
         elif status_code == 404:
-            raise AraraResourceNotFoundError(message, status_code, error_data)
+            raise AraraResourceNotFoundError(
+                message, status_code, error_data, code, details
+            )
         elif status_code == 429:
             raise AraraRateLimitError(
                 message,
                 status_code,
                 error_data,
                 retry_after=self._parse_retry_after(response),
+                code=code,
+                details=details,
             )
         elif 500 <= status_code < 600:
-            raise AraraServerError(message, status_code, error_data)
+            raise AraraServerError(message, status_code, error_data, code, details)
         else:
-            raise AraraError(f"HTTP {status_code}: {message}", status_code, error_data)
+            raise AraraError(
+                f"HTTP {status_code}: {message}", status_code, error_data, code, details
+            )
 
     def _parse_body(
         self,
@@ -128,9 +209,11 @@ class HttpClient:
         response_model: Optional[Type[T]] = None,
         **kwargs,
     ) -> Union[T, Dict[str, Any], None]:
-        """Perform a synchronous HTTP request with retries on timeout, connection and 5xx errors."""
+        """Send a request, retrying timeouts, connection errors, 5xx and 429."""
         try:
-            response = Retrying(**self._retry_config)(self._send, method, path, **kwargs)
+            response = Retrying(**self._retry_config)(
+                self._send, method, path, **kwargs
+            )
         except httpx.TimeoutException as e:
             raise AraraTimeoutError("Request timed out") from e
         except httpx.RequestError as e:
@@ -144,7 +227,7 @@ class HttpClient:
         response_model: Optional[Type[T]] = None,
         **kwargs,
     ) -> Union[T, Dict[str, Any], None]:
-        """Perform an asynchronous HTTP request with retries on timeout, connection and 5xx errors."""
+        """Send an async request, retrying timeouts, connection errors, 5xx and 429."""
         try:
             response = await AsyncRetrying(**self._retry_config)(
                 self._asend, method, path, **kwargs
