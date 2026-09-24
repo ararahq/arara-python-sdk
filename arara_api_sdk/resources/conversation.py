@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Optional
 
-from arara_api_sdk.resources import BaseResource
 from arara_api_sdk.models.conversation import ConversationReplyRequest
+from arara_api_sdk.resources import BaseResource
 
 _BASE = "/v1/conversations"
 

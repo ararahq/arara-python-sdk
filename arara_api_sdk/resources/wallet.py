@@ -1,9 +1,9 @@
-from arara_api_sdk.resources import BaseResource
 from arara_api_sdk.models.wallet import (
     AutoRechargeSettingsDTO,
     UpdateAutoRechargeRequest,
     WalletTransactionPageDTO,
 )
+from arara_api_sdk.resources import BaseResource
 
 
 class WalletResource(BaseResource):
