@@ -20,16 +20,19 @@ def test_auth_me_calls_auth_me_without_v1(arara_client, respx_mock):
     assert route.call_count == 1
     assert me.name == "Ana"
     assert me.role == "ADMIN"
+    assert me.email_pending is False
 
 
 @pytest.mark.asyncio
 async def test_auth_me_async(arara_client, respx_mock):
     """Test the async auth.me path."""
     respx_mock.get("https://api.arara.test/auth/me").mock(
-        return_value=httpx.Response(200, json={"name": "Ana", "email": "a@x.com"})
+        return_value=httpx.Response(200, json={"name": "Ana", "email": "a@x.com", "role": None, "emailPending": True})
     )
 
-    assert (await arara_client.auth.me_async()).email == "a@x.com"
+    me = await arara_client.auth.me_async()
+    assert me.email == "a@x.com"
+    assert me.email_pending is True
 
 
 def test_removed_resources_are_gone(arara_client):

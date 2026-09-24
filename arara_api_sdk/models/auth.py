@@ -6,14 +6,13 @@ from pydantic import BaseModel, ConfigDict, Field
 class CurrentUserResponse(BaseModel):
     """``GET /auth/me``: the user that owns the API key.
 
-    Only the stable fields are typed; anything else the API returns is kept
-    as extra attributes.
+    Mirrors ``UserResponseDTO {name, email, role, emailPending}``; unknown
+    fields the API may add later are kept as extra attributes.
     """
 
     model_config = ConfigDict(populate_by_name=True, extra="allow")
 
-    id: Optional[str] = None
-    name: Optional[str] = None
-    email: Optional[str] = None
+    name: str
+    email: str
     role: Optional[str] = None
-    organization_id: Optional[str] = Field(None, alias="organizationId")
+    email_pending: bool = Field(False, alias="emailPending")
