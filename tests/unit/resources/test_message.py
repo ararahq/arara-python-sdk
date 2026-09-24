@@ -94,6 +94,35 @@ def test_send_message_retry_after_5xx_reuses_same_key(
     assert keys[0] == keys[1]
 
 
+@pytest.mark.parametrize("blank", ["", " ", "\t"])
+def test_send_message_generates_key_when_caller_key_is_blank(
+    arara_client, respx_mock, blank
+):
+    """Test that a blank caller key is replaced by a generated UUID v4."""
+    route = respx_mock.post(MESSAGES).mock(
+        return_value=httpx.Response(202, json=accepted())
+    )
+
+    arara_client.messages.send(
+        SendMessageRequest(receiver="1", body="Hi"), idempotency_key=blank
+    )
+
+    assert len(route.calls[0].request.headers["Idempotency-Key"]) == 36
+
+
+def test_send_message_strips_caller_key(arara_client, respx_mock):
+    """Test that surrounding whitespace is stripped from the caller key."""
+    route = respx_mock.post(MESSAGES).mock(
+        return_value=httpx.Response(202, json=accepted())
+    )
+
+    arara_client.messages.send(
+        SendMessageRequest(receiver="1", body="Hi"), idempotency_key=" order-7 "
+    )
+
+    assert route.calls[0].request.headers["Idempotency-Key"] == "order-7"
+
+
 def test_send_message_uses_caller_idempotency_key(arara_client, respx_mock):
     """Test that a caller-supplied key is sent as is."""
     route = respx_mock.post(MESSAGES).mock(
@@ -187,7 +216,10 @@ def test_send_batch_posts_items_with_idempotency_key(arara_client, respx_mock):
                 "total": 1,
                 "accepted": 1,
                 "totalCost": "0.05",
-                "messages": [accepted()],
+                "messages": [
+                    {"id": "msg_123", "receiver": "1", "status": "QUEUED", "cost": "0.05"},
+                    {"id": None, "receiver": "2", "status": "FAILED", "cost": None},
+                ],
             },
         )
     )
@@ -204,6 +236,9 @@ def test_send_batch_posts_items_with_idempotency_key(arara_client, respx_mock):
     assert route.calls[0].request.headers["Idempotency-Key"]
     assert result.batch_id == "b-1"
     assert result.messages[0].id == "msg_123"
+    assert result.messages[1].id is None
+    assert result.messages[1].status == "FAILED"
+    assert result.messages[1].cost is None
 
 
 @pytest.mark.asyncio
@@ -211,7 +246,17 @@ async def test_send_batch_async_and_list_by_batch(arara_client, respx_mock):
     """Test async batch send and the batch listing paths."""
     respx_mock.post(BATCH).mock(
         return_value=httpx.Response(
-            202, json={"batchId": "b-2", "total": 1, "accepted": 0, "messages": []}
+            202,
+            json={
+                "batchId": "b-2",
+                "templateName": "t",
+                "total": 1,
+                "accepted": 0,
+                "totalCost": "0",
+                "messages": [
+                    {"id": None, "receiver": "1", "status": "FAILED", "cost": None}
+                ],
+            },
         )
     )
     list_route = respx_mock.get(MESSAGES).mock(
@@ -226,6 +271,7 @@ async def test_send_batch_async_and_list_by_batch(arara_client, respx_mock):
     listed_async = await arara_client.messages.list_by_batch_async("b-2")
 
     assert result.batch_id == "b-2"
+    assert result.messages[0].id is None
     assert listed_sync[0].id == listed_async[0].id == "msg_123"
     assert list_route.calls[0].request.url.params["batchId"] == "b-2"
 

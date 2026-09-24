@@ -93,6 +93,15 @@ class BatchMessageRequest(BaseModel):
     )
 
 
+class BatchMessageItemResponse(BaseModel):
+    """Per-recipient result of a batch; ``id`` and ``cost`` are null on failure."""
+
+    id: Optional[str] = None
+    receiver: str
+    status: str
+    cost: Optional[Decimal] = None
+
+
 class BatchMessageResponse(BaseModel):
     """Result of a batch send."""
 
@@ -103,4 +112,4 @@ class BatchMessageResponse(BaseModel):
     total: int
     accepted: int
     total_cost: Optional[Decimal] = Field(None, alias="totalCost")
-    messages: List[MessageResponse] = []
+    messages: List[BatchMessageItemResponse] = []
