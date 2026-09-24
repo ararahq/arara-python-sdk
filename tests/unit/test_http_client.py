@@ -4,6 +4,9 @@ import pytest
 from arara_api_sdk.exceptions import (
     AraraAuthError,
     AraraError,
+    AraraForbiddenError,
+    AraraPlanFeatureLockedError,
+    AraraUnprocessableError,
     AraraRateLimitError,
     AraraResourceNotFoundError,
     AraraValidationError,
@@ -195,10 +198,10 @@ def test_http_client_extracts_code_message_and_details_from_envelope(
     )
 
     # Act & Assert
-    with pytest.raises(AraraError) as exc:
+    with pytest.raises(AraraForbiddenError) as exc:
         http_client.request("GET", "/envelope")
-    assert str(exc.value) == "HTTP 403: Limite do plano atingido em 'numbers': 1/1."
-    assert exc.value.message == "HTTP 403: Limite do plano atingido em 'numbers': 1/1."
+    assert str(exc.value) == "Limite do plano atingido em 'numbers': 1/1."
+    assert exc.value.message == "Limite do plano atingido em 'numbers': 1/1."
     assert exc.value.code == "PLAN_LIMIT_REACHED"
     assert exc.value.details == {"feature": "numbers", "current": 1, "max": 1}
 
@@ -246,3 +249,109 @@ def test_http_client_retry_logic_on_server_error(http_client, respx_mock):
     # Assert
     assert response == {"status": "ok-after-retry"}
     assert route.call_count == 3
+
+
+def test_http_client_raises_plan_feature_locked_with_upgrade_details(
+    http_client, respx_mock
+):
+    """Test that 403 PLAN_FEATURE_LOCKED becomes a typed error, not an auth error."""
+    body = {
+        "error": {
+            "code": "PLAN_FEATURE_LOCKED",
+            "message": "Essa feature esta liberada a partir do plano Voo.",
+            "details": {
+                "feature": "campaigns",
+                "currentPlan": "DECOLAGEM",
+                "upgradeTo": "VOO",
+            },
+        }
+    }
+    respx_mock.get("https://api.arara.test/locked").mock(
+        return_value=httpx.Response(403, json=body)
+    )
+
+    with pytest.raises(AraraPlanFeatureLockedError) as exc:
+        http_client.request("GET", "/locked")
+    assert exc.value.status_code == 403
+    assert exc.value.feature == "campaigns"
+    assert exc.value.current_plan == "DECOLAGEM"
+    assert exc.value.upgrade_to == "VOO"
+    assert not isinstance(exc.value, AraraAuthError)
+
+
+def test_http_client_treats_403_without_code_as_auth_error(http_client, respx_mock):
+    """Test that a bare 403 (key rejected by the filter) is an auth error."""
+    respx_mock.get("https://api.arara.test/bare-403").mock(
+        return_value=httpx.Response(403)
+    )
+
+    with pytest.raises(AraraAuthError) as exc:
+        http_client.request("GET", "/bare-403")
+    assert exc.value.status_code == 403
+    assert exc.value.code is None
+
+
+def test_http_client_raises_unprocessable_on_422_preflight(http_client, respx_mock):
+    """Test that a 422 send pre-flight rejection keeps its code."""
+    body = {"error": {"code": "INVALID_RECIPIENT", "message": "Numero invalido"}}
+    respx_mock.get("https://api.arara.test/422").mock(
+        return_value=httpx.Response(422, json=body)
+    )
+
+    with pytest.raises(AraraUnprocessableError) as exc:
+        http_client.request("GET", "/422")
+    assert exc.value.code == "INVALID_RECIPIENT"
+
+
+def test_http_client_keeps_generic_error_for_unmapped_status(http_client, respx_mock):
+    """Test that an unmapped status still raises AraraError with the status."""
+    respx_mock.get("https://api.arara.test/402").mock(
+        return_value=httpx.Response(
+            402, json={"error": {"code": "INSUFFICIENT_FUNDS", "message": "Sem saldo"}}
+        )
+    )
+
+    with pytest.raises(AraraError) as exc:
+        http_client.request("GET", "/402")
+    assert str(exc.value) == "HTTP 402: Sem saldo"
+    assert exc.value.code == "INSUFFICIENT_FUNDS"
+
+
+def test_http_client_does_not_retry_post_without_idempotency_key(
+    http_client, respx_mock, recorded_sleeps
+):
+    """Test that a POST without Idempotency-Key is never retried."""
+    route = respx_mock.post("https://api.arara.test/post").mock(
+        return_value=httpx.Response(500)
+    )
+
+    with pytest.raises(AraraError):
+        http_client.request("POST", "/post", json={})
+    assert route.call_count == 1
+
+
+def test_http_client_retries_post_with_idempotency_key_reusing_it(
+    http_client, respx_mock, recorded_sleeps
+):
+    """Test that a POST with Idempotency-Key retries and sends the same key."""
+    route = respx_mock.post("https://api.arara.test/post-key").mock(
+        side_effect=[httpx.Response(503), httpx.Response(200, json={"ok": True})]
+    )
+
+    response = http_client.request(
+        "POST", "/post-key", json={}, headers={"Idempotency-Key": "k-1"}
+    )
+
+    assert response == {"ok": True}
+    assert route.call_count == 2
+    keys = [call.request.headers["Idempotency-Key"] for call in route.calls]
+    assert keys == ["k-1", "k-1"]
+
+
+def test_http_client_returns_none_for_empty_success_body(http_client, respx_mock):
+    """Test that a 200 with an empty body (Void endpoints) yields None."""
+    respx_mock.post("https://api.arara.test/void").mock(
+        return_value=httpx.Response(200)
+    )
+
+    assert http_client.request("POST", "/void") is None

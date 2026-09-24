@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Dict, Optional, Tuple, Type, TypeVar, Union
+from typing import Any, Callable, Dict, Mapping, Optional, Tuple, Type, TypeVar, Union
 
 import httpx
 from pydantic import BaseModel
@@ -17,10 +17,13 @@ from arara_api_sdk.exceptions import (
     AraraAuthError,
     AraraConnectionError,
     AraraError,
+    AraraForbiddenError,
+    AraraPlanFeatureLockedError,
     AraraRateLimitError,
     AraraResourceNotFoundError,
     AraraServerError,
     AraraTimeoutError,
+    AraraUnprocessableError,
     AraraValidationError,
 )
 
@@ -36,6 +39,17 @@ RETRYABLE_EXCEPTIONS = (
 )
 
 MAX_RETRY_AFTER_SECONDS = 60
+IDEMPOTENCY_HEADER = "Idempotency-Key"
+PLAN_FEATURE_LOCKED = "PLAN_FEATURE_LOCKED"
+RETRY_SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "PUT", "DELETE"})
+
+_STATUS_ERRORS: Dict[int, Type[AraraError]] = {
+    400: AraraValidationError,
+    401: AraraAuthError,
+    404: AraraResourceNotFoundError,
+    422: AraraUnprocessableError,
+    429: AraraRateLimitError,
+}
 UNKNOWN_ERROR_MESSAGE = "Unknown error"
 
 _EXPONENTIAL_BACKOFF = wait_exponential(multiplier=1, min=2, max=10)
@@ -63,6 +77,40 @@ def _should_retry(retry_state: RetryCallState) -> bool:
             or exception.retry_after <= MAX_RETRY_AFTER_SECONDS
         )
     return isinstance(exception, RETRYABLE_EXCEPTIONS)
+
+
+def _never_retry(retry_state: RetryCallState) -> bool:
+    """Retry policy for non-idempotent calls: a second attempt could duplicate."""
+    return False
+
+
+def _retry_policy(
+    method: str, headers: Optional[Mapping[str, str]]
+) -> Callable[[RetryCallState], bool]:
+    """Pick the retry policy for a call.
+
+    GET and other idempotent methods retry freely. A POST/PATCH only retries
+    when it carries an ``Idempotency-Key``: the same key travels on every
+    attempt, so the API collapses duplicates instead of sending twice.
+    """
+    if method.upper() in RETRY_SAFE_METHODS:
+        return _should_retry
+    if headers and headers.get(IDEMPOTENCY_HEADER):
+        return _should_retry
+    return _never_retry
+
+
+def _error_class(status_code: int, code: Optional[str]) -> Type[AraraError]:
+    """Map status and envelope code to the exception type."""
+    if status_code == 403:
+        if code is None:
+            return AraraAuthError
+        if code == PLAN_FEATURE_LOCKED:
+            return AraraPlanFeatureLockedError
+        return AraraForbiddenError
+    if 500 <= status_code < 600:
+        return AraraServerError
+    return _STATUS_ERRORS.get(status_code, AraraError)
 
 
 def _wait_strategy(retry_state: RetryCallState) -> float:
@@ -155,30 +203,17 @@ class HttpClient:
             error_data = {"error": response.text}
 
         code, message, details = self._parse_error_envelope(error_data)
-
-        if status_code == 401:
-            raise AraraAuthError(message, status_code, error_data, code, details)
-        elif status_code == 400:
-            raise AraraValidationError(message, status_code, error_data, code, details)
-        elif status_code == 404:
-            raise AraraResourceNotFoundError(
-                message, status_code, error_data, code, details
-            )
-        elif status_code == 429:
-            raise AraraRateLimitError(
-                message,
-                status_code,
-                error_data,
-                retry_after=self._parse_retry_after(response),
-                code=code,
-                details=details,
-            )
-        elif 500 <= status_code < 600:
-            raise AraraServerError(message, status_code, error_data, code, details)
-        else:
-            raise AraraError(
-                f"HTTP {status_code}: {message}", status_code, error_data, code, details
-            )
+        error_class = _error_class(status_code, code)
+        if error_class is AraraError:
+            message = f"HTTP {status_code}: {message}"
+        raise error_class(
+            message,
+            status_code,
+            error_data,
+            code=code,
+            details=details,
+            retry_after=self._parse_retry_after(response),
+        )
 
     def _parse_body(
         self,
@@ -186,11 +221,17 @@ class HttpClient:
         response_model: Optional[Type[T]],
     ) -> Union[T, Dict[str, Any], None]:
         """Deserialize the response body into the requested model or dict."""
-        if response.status_code == 204:
+        if response.status_code == 204 or not response.content:
             return None
         if response_model:
             return response_model.model_validate(response.json())
         return response.json()
+
+    def _config_for(self, method: str, kwargs: Dict[str, Any]) -> Dict[str, Any]:
+        """Build the tenacity config for one call, gating retry by method."""
+        config = dict(self._retry_config)
+        config["retry"] = _retry_policy(method, kwargs.get("headers"))
+        return config
 
     def _send(self, method: str, path: str, **kwargs: Any) -> httpx.Response:
         """Send a synchronous request and raise for error statuses."""
@@ -207,11 +248,14 @@ class HttpClient:
         method: str,
         path: str,
         response_model: Optional[Type[T]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Union[T, Dict[str, Any], None]:
-        """Send a request, retrying timeouts, connection errors, 5xx and 429."""
+        """Send a request, retrying timeouts, connection errors, 5xx and 429.
+
+        POST/PATCH are retried only when they carry an Idempotency-Key.
+        """
         try:
-            response = Retrying(**self._retry_config)(
+            response = Retrying(**self._config_for(method, kwargs))(
                 self._send, method, path, **kwargs
             )
         except httpx.TimeoutException as e:
@@ -225,11 +269,11 @@ class HttpClient:
         method: str,
         path: str,
         response_model: Optional[Type[T]] = None,
-        **kwargs,
+        **kwargs: Any,
     ) -> Union[T, Dict[str, Any], None]:
         """Send an async request, retrying timeouts, connection errors, 5xx and 429."""
         try:
-            response = await AsyncRetrying(**self._retry_config)(
+            response = await AsyncRetrying(**self._config_for(method, kwargs))(
                 self._asend, method, path, **kwargs
             )
         except httpx.TimeoutException as e:
@@ -238,10 +282,10 @@ class HttpClient:
             raise AraraConnectionError(f"Connection error: {str(e)}") from e
         return self._parse_body(response, response_model)
 
-    def close(self):
+    def close(self) -> None:
         """Close the synchronous client."""
         self.sync_client.close()
 
-    async def aclose(self):
+    async def aclose(self) -> None:
         """Close the asynchronous client."""
         await self.async_client.aclose()
