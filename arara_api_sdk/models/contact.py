@@ -1,11 +1,12 @@
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ContactRequest(BaseModel):
     """Request model for importing a contact."""
+
     name: str
     phone: str
     email: Optional[str] = None
@@ -14,6 +15,7 @@ class ContactRequest(BaseModel):
 
 class ContactPatchRequest(BaseModel):
     """Request model for updating a contact."""
+
     name: Optional[str] = None
     email: Optional[str] = None
     tags: Optional[List[str]] = None
@@ -21,6 +23,9 @@ class ContactPatchRequest(BaseModel):
 
 class ContactResponse(BaseModel):
     """Response model for a single contact."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     id: UUID
     name: str
     phone: str
@@ -39,24 +44,22 @@ class ContactResponse(BaseModel):
     opt_out_at: Optional[str] = Field(None, alias="optOutAt")
     last_template_name: Optional[str] = Field(None, alias="lastTemplateName")
 
-    class Config:
-        populate_by_name = True
-
 
 class ContactsListResponse(BaseModel):
     """Paginated list of contacts."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     contacts: List[ContactResponse]
     total: int
     page: int
     size: int
     total_pages: int = Field(..., alias="totalPages")
 
-    class Config:
-        populate_by_name = True
-
 
 class ContactsBatchError(BaseModel):
     """A single failed row in a batch import."""
+
     index: int
     phone: Optional[str] = None
     reason: str
@@ -64,18 +67,21 @@ class ContactsBatchError(BaseModel):
 
 class ContactsBatchResponse(BaseModel):
     """Result of a batch contact import."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     import_id: UUID = Field(..., alias="importId")
     created: int
     updated: int
     skipped: int
     errors: List[ContactsBatchError] = []
 
-    class Config:
-        populate_by_name = True
-
 
 class ContactsStatsResponse(BaseModel):
     """Aggregate lifecycle counts for the organization's contacts."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     total: int
     new_count: int = Field(..., alias="newCount")
     engaged: int
@@ -83,29 +89,30 @@ class ContactsStatsResponse(BaseModel):
     dormant: int
     opted_out: int = Field(..., alias="optedOut")
 
-    class Config:
-        populate_by_name = True
-
 
 class ContactsReactivationCandidate(BaseModel):
     """A dormant contact eligible for reactivation."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     phone: str
     name: str
     last_message_at: Optional[str] = Field(None, alias="lastMessageAt")
     last_template_name: Optional[str] = Field(None, alias="lastTemplateName")
 
-    class Config:
-        populate_by_name = True
-
 
 class ContactsReactivationResponse(BaseModel):
     """List of reactivation candidates."""
+
     total: int
     candidates: List[ContactsReactivationCandidate]
 
 
 class ContactMessageItem(BaseModel):
     """A single message in a contact's history."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     id: UUID
     direction: str
     status: str
@@ -113,12 +120,10 @@ class ContactMessageItem(BaseModel):
     body: Optional[str] = None
     created_at: str = Field(..., alias="createdAt")
 
-    class Config:
-        populate_by_name = True
-
 
 class ContactMessagesResponse(BaseModel):
     """Message history for a contact."""
+
     phone: str
     total: int
     messages: List[ContactMessageItem]
