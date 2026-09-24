@@ -1,13 +1,17 @@
-from typing import Any, Dict, List
+from typing import Any, Dict
 
-from arara_api_sdk.resources import BaseResource
+from arara_api_sdk.models.common import Page
 from arara_api_sdk.models.smart_link import (
     CreateWhatsAppSmartLinkRequest,
     UpdateWhatsAppSmartLinkRequest,
     WhatsAppSmartLinkResponse,
 )
+from arara_api_sdk.resources import BaseResource
 
 _BASE = "/v1/smart-links/whatsapp"
+DEFAULT_SMART_LINK_PAGE_SIZE = 50
+
+SmartLinkPage = Page[WhatsAppSmartLinkResponse]
 
 
 class SmartLinkResource(BaseResource):
@@ -53,15 +57,27 @@ class SmartLinkResource(BaseResource):
             json=request.model_dump(by_alias=True, exclude_none=True),
         )
 
-    def list(self) -> List[WhatsAppSmartLinkResponse]:
-        """GET /v1/smart-links/whatsapp — lists smart links synchronously."""
-        response = self._http.request("GET", _BASE)
-        return [WhatsAppSmartLinkResponse.model_validate(item) for item in response]
+    def list(
+        self, page: int = 0, size: int = DEFAULT_SMART_LINK_PAGE_SIZE
+    ) -> SmartLinkPage:
+        """GET /v1/smart-links/whatsapp — one page ``{data, pagination}``."""
+        return self._http.request(
+            "GET",
+            _BASE,
+            response_model=SmartLinkPage,
+            params={"page": page, "size": size},
+        )
 
-    async def list_async(self) -> List[WhatsAppSmartLinkResponse]:
-        """GET /v1/smart-links/whatsapp — lists smart links asynchronously."""
-        response = await self._http.arequest("GET", _BASE)
-        return [WhatsAppSmartLinkResponse.model_validate(item) for item in response]
+    async def list_async(
+        self, page: int = 0, size: int = DEFAULT_SMART_LINK_PAGE_SIZE
+    ) -> SmartLinkPage:
+        """GET /v1/smart-links/whatsapp — one page, asynchronously."""
+        return await self._http.arequest(
+            "GET",
+            _BASE,
+            response_model=SmartLinkPage,
+            params={"page": page, "size": size},
+        )
 
     def stats(self, link_id: str) -> Dict[str, Any]:
         """GET /v1/smart-links/whatsapp/{id}/stats — click stats synchronously."""
