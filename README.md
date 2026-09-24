@@ -23,7 +23,7 @@ Autenticação por API key (`Bearer ara_live_...`), criada no painel da Arara. S
 export ARARA_API_KEY="ara_live_..."
 ```
 
-Algumas áreas exigem chave com permissão **ADMIN**: `contacts`, `conversations`, `wallet` e `auth.me()`. Com chave sem essa permissão a API responde 403 e o SDK levanta `AraraAuthError`.
+Algumas áreas exigem chave com permissão **ADMIN**: `contacts`, `conversations`, `wallet` e `auth.me()`. Com chave sem essa permissão a API responde 403 sem envelope e o SDK levanta `AraraForbiddenError` (a chave é válida, só não tem permissão).
 
 ## Uso rápido
 
@@ -66,7 +66,7 @@ asyncio.run(main())
 
 `messages.send`, `messages.send_batch` e `campaigns.create` sempre mandam `Idempotency-Key`. Se você não passar `idempotency_key`, o SDK gera um UUID v4 por chamada e usa a mesma chave em todas as tentativas daquela chamada: um timeout depois de a API aceitar não vira envio duplicado.
 
-Timeout, erro de conexão, 5xx e 429 são repetidos até `max_retries` (backoff exponencial, ou o `Retry-After` do 429). GET, PUT e DELETE repetem livremente; POST e PATCH só repetem quando levam `Idempotency-Key`.
+Timeout, erro de conexão, 5xx e 429 são repetidos até `max_retries` (backoff exponencial, ou o `Retry-After` do 429). GET, PUT e DELETE repetem livremente; POST e PATCH só repetem quando levam `Idempotency-Key` não vazia (chave só com espaços conta como ausente; nos métodos do SDK ela é trocada por um UUID gerado).
 
 ## Recursos
 
@@ -110,9 +110,10 @@ Todo erro herda de `AraraError` e traz `status_code`, `code`, `message`, `detail
 
 | Situação | Exceção |
 |---|---|
-| 401, ou 403 sem código (chave inválida, expirada ou sem permissão) | `AraraAuthError` |
+| 401 | `AraraAuthError` |
+| 403 sem envelope (corpo do Spring `{timestamp, status, error, path}` ou vazio): chave inválida, sem permissão (ex.: não ADMIN) ou rota fora da allowlist | `AraraForbiddenError` (mensagem = campo `error` do corpo) |
 | 403 `PLAN_FEATURE_LOCKED` | `AraraPlanFeatureLockedError` (`feature`, `current_plan`, `upgrade_to`) |
-| outro 403 com código (`PLAN_LIMIT_REACHED`, `ACCOUNT_NOT_ACTIVATED`...) | `AraraForbiddenError` |
+| 403 com outro código (`PLAN_LIMIT_REACHED`, `ACCOUNT_NOT_ACTIVATED`...) | `AraraApiError` (com `code`) |
 | 400 | `AraraValidationError` |
 | 404 | `AraraResourceNotFoundError` |
 | 422 (`INVALID_RECIPIENT`, `RECIPIENT_OPTED_OUT`, `TEMPLATE_PAUSED`...) | `AraraUnprocessableError` |

@@ -14,6 +14,7 @@ from tenacity import (
 from arara_api_sdk._version import __version__
 from arara_api_sdk.config import SDKConfig
 from arara_api_sdk.exceptions import (
+    AraraApiError,
     AraraAuthError,
     AraraConnectionError,
     AraraError,
@@ -95,7 +96,8 @@ def _retry_policy(
     """
     if method.upper() in RETRY_SAFE_METHODS:
         return _should_retry
-    if headers and headers.get(IDEMPOTENCY_HEADER):
+    key = headers.get(IDEMPOTENCY_HEADER) if headers else None
+    if isinstance(key, str) and key.strip():
         return _should_retry
     return _never_retry
 
@@ -104,10 +106,10 @@ def _error_class(status_code: int, code: Optional[str]) -> Type[AraraError]:
     """Map status and envelope code to the exception type."""
     if status_code == 403:
         if code is None:
-            return AraraAuthError
+            return AraraForbiddenError
         if code == PLAN_FEATURE_LOCKED:
             return AraraPlanFeatureLockedError
-        return AraraForbiddenError
+        return AraraApiError
     if 500 <= status_code < 600:
         return AraraServerError
     return _STATUS_ERRORS.get(status_code, AraraError)

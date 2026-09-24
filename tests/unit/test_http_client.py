@@ -2,6 +2,7 @@ import httpx
 import pytest
 
 from arara_api_sdk.exceptions import (
+    AraraApiError,
     AraraAuthError,
     AraraError,
     AraraForbiddenError,
@@ -198,8 +199,9 @@ def test_http_client_extracts_code_message_and_details_from_envelope(
     )
 
     # Act & Assert
-    with pytest.raises(AraraForbiddenError) as exc:
+    with pytest.raises(AraraApiError) as exc:
         http_client.request("GET", "/envelope")
+    assert not isinstance(exc.value, AraraForbiddenError)
     assert str(exc.value) == "Limite do plano atingido em 'numbers': 1/1."
     assert exc.value.message == "Limite do plano atingido em 'numbers': 1/1."
     assert exc.value.code == "PLAN_LIMIT_REACHED"
@@ -277,17 +279,39 @@ def test_http_client_raises_plan_feature_locked_with_upgrade_details(
     assert exc.value.current_plan == "DECOLAGEM"
     assert exc.value.upgrade_to == "VOO"
     assert not isinstance(exc.value, AraraAuthError)
+    assert isinstance(exc.value, AraraApiError)
 
 
-def test_http_client_treats_403_without_code_as_auth_error(http_client, respx_mock):
-    """Test that a bare 403 (key rejected by the filter) is an auth error."""
+def test_http_client_maps_spring_403_body_to_forbidden_not_auth(
+    http_client, respx_mock
+):
+    """Test that the key filter's Spring 403 body is a forbidden error, not auth."""
+    body = {
+        "timestamp": "2026-09-24T12:00:00.000+00:00",
+        "status": 403,
+        "error": "Forbidden",
+        "path": "/v1/contacts",
+    }
+    respx_mock.get("https://api.arara.test/v1/contacts").mock(
+        return_value=httpx.Response(403, json=body)
+    )
+
+    with pytest.raises(AraraForbiddenError) as exc:
+        http_client.request("GET", "/v1/contacts")
+    assert not isinstance(exc.value, AraraAuthError)
+    assert exc.value.status_code == 403
+    assert exc.value.code is None
+    assert str(exc.value) == "Forbidden"
+
+
+def test_http_client_maps_empty_403_to_forbidden(http_client, respx_mock):
+    """Test that a 403 with empty body (path outside allowlist) is forbidden."""
     respx_mock.get("https://api.arara.test/bare-403").mock(
         return_value=httpx.Response(403)
     )
 
-    with pytest.raises(AraraAuthError) as exc:
+    with pytest.raises(AraraForbiddenError) as exc:
         http_client.request("GET", "/bare-403")
-    assert exc.value.status_code == 403
     assert exc.value.code is None
 
 
@@ -355,3 +379,19 @@ def test_http_client_returns_none_for_empty_success_body(http_client, respx_mock
     )
 
     assert http_client.request("POST", "/void") is None
+
+
+@pytest.mark.parametrize("blank", ["", " ", "\t", "  \n"])
+def test_http_client_does_not_retry_post_with_blank_idempotency_key(
+    http_client, respx_mock, recorded_sleeps, blank
+):
+    """Test that a whitespace-only Idempotency-Key does not unlock POST retries."""
+    route = respx_mock.post("https://api.arara.test/post-blank").mock(
+        return_value=httpx.Response(503)
+    )
+
+    with pytest.raises(AraraError):
+        http_client.request(
+            "POST", "/post-blank", json={}, headers={"Idempotency-Key": blank}
+        )
+    assert route.call_count == 1

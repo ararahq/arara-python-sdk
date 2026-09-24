@@ -29,18 +29,24 @@ class AraraError(Exception):
 
 
 class AraraAuthError(AraraError):
-    """Raised when the API key is missing, invalid, expired or not allowed.
-
-    The backend answers key failures with 401 or with 403 without an error
-    code (the filter rejects the request before the envelope is built).
-    """
+    """Raised on 401: the API key is missing or invalid."""
 
 
 class AraraForbiddenError(AraraError):
-    """Raised on a business 403 that carries an error code."""
+    """Raised on 403 without an error envelope.
+
+    The key filter rejects with the plain Spring body
+    ``{timestamp, status, error, path}`` (or empty) for an invalid key, a key
+    without the needed permission (e.g. not ADMIN) or a path outside the
+    allowlist. The body's ``error`` text becomes the message.
+    """
 
 
-class AraraPlanFeatureLockedError(AraraForbiddenError):
+class AraraApiError(AraraError):
+    """Raised on a business error with an envelope code, e.g. 403 PLAN_LIMIT_REACHED."""
+
+
+class AraraPlanFeatureLockedError(AraraApiError):
     """Raised on 403 ``PLAN_FEATURE_LOCKED``: the plan does not include the feature."""
 
     def __init__(

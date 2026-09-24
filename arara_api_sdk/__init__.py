@@ -1,5 +1,6 @@
 from arara_api_sdk.client import AraraClient
 from arara_api_sdk.exceptions import (
+    AraraApiError,
     AraraAuthError,
     AraraConnectionError,
     AraraError,
@@ -17,6 +18,7 @@ __all__ = [
     "AraraClient",
     "AraraError",
     "AraraAuthError",
+    "AraraApiError",
     "AraraForbiddenError",
     "AraraPlanFeatureLockedError",
     "AraraValidationError",
