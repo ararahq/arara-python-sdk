@@ -32,13 +32,20 @@ jobs:
         run: |
           NAME=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['name'])")
           LOCAL=$(python -c "import tomllib; print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
-          STATUS=$(curl -s -o /dev/null -w '%{http_code}' "https://pypi.org/pypi/$NAME/$LOCAL/json")
-          if [ "$STATUS" = "200" ]; then
-            echo "publish=false" >> "$GITHUB_OUTPUT"
-            echo "::notice::$NAME $LOCAL ja existe no PyPI, nada a publicar"
-          else
-            echo "publish=true" >> "$GITHUB_OUTPUT"
-          fi
+          STATUS=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "https://pypi.org/pypi/$NAME/$LOCAL/json" || true)
+          case "$STATUS" in
+            200)
+              echo "publish=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::$NAME $LOCAL ja existe no PyPI, nada a publicar"
+              ;;
+            404)
+              echo "publish=true" >> "$GITHUB_OUTPUT"
+              ;;
+            *)
+              echo "::error::PyPI respondeu HTTP $STATUS ao checar $NAME $LOCAL; abortando sem publicar"
+              exit 1
+              ;;
+          esac
           echo "version=$LOCAL" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v4
@@ -53,16 +60,27 @@ jobs:
     runs-on: ubuntu-latest
     environment: pypi
     permissions:
-      contents: write
+      contents: read
       id-token: write
     steps:
-      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           name: dist
           path: dist/
 
       - uses: pypa/gh-action-pypi-publish@release/v1
+
+  release:
+    needs: [build, publish]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist/
 
       - name: Tag and release
         env:
