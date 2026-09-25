@@ -1,14 +1,16 @@
-from typing import Optional
-from pydantic_settings import BaseSettings
-from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+DEFAULT_BASE_URL = "https://api.ararahq.com"
+DEFAULT_TIMEOUT_SECONDS = 30.0
+DEFAULT_MAX_RETRIES = 3
+
 
 class SDKConfig(BaseSettings):
-    """SDK Configuration settings."""
-    api_key: str = Field(..., env="ARARA_API_KEY")
-    base_url: str = Field("https://api.ararahq.com", env="ARARA_BASE_URL")
-    timeout: float = Field(30.0, env="ARARA_TIMEOUT")
-    max_retries: int = Field(3, env="ARARA_MAX_RETRIES")
+    """SDK configuration, read from arguments or ``ARARA_*`` env vars."""
 
-    class Config:
-        env_prefix = "ARARA_"
-        case_sensitive = False
+    model_config = SettingsConfigDict(env_prefix="ARARA_", case_sensitive=False)
+
+    api_key: str
+    base_url: str = DEFAULT_BASE_URL
+    timeout: float = DEFAULT_TIMEOUT_SECONDS
+    max_retries: int = DEFAULT_MAX_RETRIES

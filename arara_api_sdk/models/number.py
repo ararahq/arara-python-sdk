@@ -1,11 +1,14 @@
 from datetime import datetime
 from typing import List, Optional
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class NumberCardDTO(BaseModel):
     """Detailed card for a single phone number, including health metrics."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     id: str
     name: str
     alias: Optional[str] = None
@@ -23,12 +26,12 @@ class NumberCardDTO(BaseModel):
     messages_last_7d: int = Field(..., alias="messagesLast7d")
     messages_last_30d: int = Field(..., alias="messagesLast30d")
 
-    class Config:
-        populate_by_name = True
-
 
 class NumbersSlotDTO(BaseModel):
     """Plan slot info for dedicated numbers."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     used: int
     max: int
     plan_label: str = Field(..., alias="planLabel")
@@ -37,34 +40,32 @@ class NumbersSlotDTO(BaseModel):
     monthly_price_cents: int = Field(..., alias="monthlyPriceCents")
     monthly_total_cents: int = Field(..., alias="monthlyTotalCents")
 
-    class Config:
-        populate_by_name = True
-
 
 class NumbersResponseDTO(BaseModel):
     """Numbers list with plan slot info."""
+
     numbers: List[NumberCardDTO]
     slot: NumbersSlotDTO
 
 
 class RequestNumberRequest(BaseModel):
     """Request a new dedicated number."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     reason: Optional[str] = None
     expected_volume: Optional[str] = Field(None, alias="expectedVolume")
     area_code: Optional[str] = Field(None, alias="areaCode")
     display_name: Optional[str] = Field(None, alias="displayName")
     profile_picture_url: Optional[str] = Field(None, alias="profilePictureUrl")
 
-    class Config:
-        populate_by_name = True
-
 
 class UpdateNumberRequest(BaseModel):
     """Update a phone number's editable fields."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
     alias: Optional[str] = None
     is_default: Optional[bool] = Field(None, alias="isDefault")
     name: Optional[str] = None
     description: Optional[str] = None
-
-    class Config:
-        populate_by_name = True

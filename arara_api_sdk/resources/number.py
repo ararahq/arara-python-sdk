@@ -1,11 +1,11 @@
 from typing import Any, Dict, List
 
-from arara_api_sdk.resources import BaseResource
 from arara_api_sdk.models.number import (
     NumbersResponseDTO,
     RequestNumberRequest,
     UpdateNumberRequest,
 )
+from arara_api_sdk.resources import BaseResource
 
 _BASE = "/v1/organizations/me/numbers"
 

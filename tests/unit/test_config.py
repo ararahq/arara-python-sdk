@@ -29,3 +29,14 @@ def test_config_default_values():
     assert config.base_url == "https://api.ararahq.com"
     assert config.timeout == 30.0
     assert config.max_retries == 3
+
+
+def test_config_reads_arara_prefixed_env_vars(monkeypatch):
+    """Test that ARARA_* env vars fill the config without deprecated Field(env=)."""
+    monkeypatch.setenv("ARARA_API_KEY", "env_key")
+    monkeypatch.setenv("ARARA_MAX_RETRIES", "5")
+
+    config = SDKConfig()
+
+    assert config.api_key == "env_key"
+    assert config.max_retries == 5

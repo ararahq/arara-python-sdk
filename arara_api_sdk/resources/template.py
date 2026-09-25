@@ -1,139 +1,136 @@
-from typing import List, Optional
+from typing import Any, Dict, Optional
 from uuid import UUID
-from arara_api_sdk.resources import BaseResource
+
+from arara_api_sdk.models.common import Page
 from arara_api_sdk.models.template import (
-    TemplateResponse, 
-    CreateTemplateRequest, 
-    TemplateStatusResponse
+    CreateTemplateRequest,
+    TemplateResponse,
+    TemplateStatusResponse,
 )
+from arara_api_sdk.resources import BaseResource
+
+_TEMPLATES = "/v1/templates"
+DEFAULT_TEMPLATE_PAGE_SIZE = 50
+DEFAULT_ANALYTICS_PERIOD = "30d"
+
+TemplatePage = Page[TemplateResponse]
+
+
+def _list_params(
+    name: Optional[str], status: Optional[str], page: int, size: int
+) -> Dict[str, Any]:
+    """Build the query string of ``GET /v1/templates``."""
+    params: Dict[str, Any] = {"page": page, "size": size}
+    if name:
+        params["name"] = name
+    if status:
+        params["status"] = status
+    return params
+
 
 class TemplateResource(BaseResource):
-    """Resource for managing templates."""
+    """Resource for message templates.
+
+    ``get``, ``get_status``, ``delete`` and ``analytics`` take the template
+    ``id`` (UUID). To find a template by name, use ``list(name=...)``.
+    """
 
     def create(self, request: CreateTemplateRequest) -> TemplateResponse:
-        """Creates a new message template synchronously.
-
-        Args:
-            request: The template creation data.
-
-        Returns:
-            The created template details.
-        """
+        """POST /v1/templates — creates and submits a template for approval."""
         return self._http.request(
-            "POST", "/v1/templates",
+            "POST",
+            _TEMPLATES,
             response_model=TemplateResponse,
-            json=request.model_dump(by_alias=True)
+            json=request.model_dump(mode="json", by_alias=True, exclude_none=True),
         )
 
     async def create_async(self, request: CreateTemplateRequest) -> TemplateResponse:
-        """Creates a new message template asynchronously.
-
-        Args:
-            request: The template creation data.
-
-        Returns:
-            The created template details.
-        """
+        """POST /v1/templates — asynchronous create."""
         return await self._http.arequest(
-            "POST", "/v1/templates",
+            "POST",
+            _TEMPLATES,
             response_model=TemplateResponse,
-            json=request.model_dump(by_alias=True)
+            json=request.model_dump(mode="json", by_alias=True, exclude_none=True),
         )
 
-    def list(self, name: Optional[str] = None) -> List[TemplateResponse]:
-        """Lists available message templates synchronously.
+    def list(
+        self,
+        name: Optional[str] = None,
+        status: Optional[str] = None,
+        page: int = 0,
+        size: int = DEFAULT_TEMPLATE_PAGE_SIZE,
+    ) -> TemplatePage:
+        """GET /v1/templates — one page ``{data, pagination}`` of templates."""
+        return self._http.request(
+            "GET",
+            _TEMPLATES,
+            response_model=TemplatePage,
+            params=_list_params(name, status, page, size),
+        )
 
-        Args:
-            name: Optional filter by template name.
-
-        Returns:
-            A list of templates.
-        """
-        params = {"name": name} if name else None
-        response = self._http.request("GET", "/v1/templates", params=params)
-        return [TemplateResponse.model_validate(item) for item in response]
-
-    async def list_async(self, name: Optional[str] = None) -> List[TemplateResponse]:
-        """Lists available message templates asynchronously.
-
-        Args:
-            name: Optional filter by template name.
-
-        Returns:
-            A list of templates.
-        """
-        params = {"name": name} if name else None
-        response = await self._http.arequest("GET", "/v1/templates", params=params)
-        return [TemplateResponse.model_validate(item) for item in response]
+    async def list_async(
+        self,
+        name: Optional[str] = None,
+        status: Optional[str] = None,
+        page: int = 0,
+        size: int = DEFAULT_TEMPLATE_PAGE_SIZE,
+    ) -> TemplatePage:
+        """GET /v1/templates — one page of templates, asynchronously."""
+        return await self._http.arequest(
+            "GET",
+            _TEMPLATES,
+            response_model=TemplatePage,
+            params=_list_params(name, status, page, size),
+        )
 
     def get(self, template_id: UUID) -> TemplateResponse:
-        """Retrieves details of a specific template synchronously.
-
-        Args:
-            template_id: The unique ID of the template.
-
-        Returns:
-            The template details.
-        """
+        """GET /v1/templates/{id} — template details."""
         return self._http.request(
-            "GET", f"/v1/templates/{template_id}",
-            response_model=TemplateResponse
+            "GET", f"{_TEMPLATES}/{template_id}", response_model=TemplateResponse
         )
 
     async def get_async(self, template_id: UUID) -> TemplateResponse:
-        """Retrieves details of a specific template asynchronously.
-
-        Args:
-            template_id: The unique ID of the template.
-
-        Returns:
-            The template details.
-        """
+        """GET /v1/templates/{id} — template details, asynchronously."""
         return await self._http.arequest(
-            "GET", f"/v1/templates/{template_id}",
-            response_model=TemplateResponse
+            "GET", f"{_TEMPLATES}/{template_id}", response_model=TemplateResponse
         )
 
     def delete(self, template_id: UUID) -> None:
-        """Deletes a message template synchronously.
-
-        Args:
-            template_id: The unique ID of the template to delete.
-        """
-        self._http.request("DELETE", f"/v1/templates/{template_id}")
+        """DELETE /v1/templates/{id} — deletes on Meta and locally."""
+        self._http.request("DELETE", f"{_TEMPLATES}/{template_id}")
 
     async def delete_async(self, template_id: UUID) -> None:
-        """Deletes a message template asynchronously.
-
-        Args:
-            template_id: The unique ID of the template to delete.
-        """
-        await self._http.arequest("DELETE", f"/v1/templates/{template_id}")
+        """DELETE /v1/templates/{id} — asynchronous delete."""
+        await self._http.arequest("DELETE", f"{_TEMPLATES}/{template_id}")
 
     def get_status(self, template_id: UUID) -> TemplateStatusResponse:
-        """Checks the status of a template synchronously.
-
-        Args:
-            template_id: The unique ID of the template.
-
-        Returns:
-            The current approval status of the template.
-        """
+        """GET /v1/templates/{id}/status — approval status."""
         return self._http.request(
-            "GET", f"/v1/templates/{template_id}/status",
-            response_model=TemplateStatusResponse
+            "GET",
+            f"{_TEMPLATES}/{template_id}/status",
+            response_model=TemplateStatusResponse,
         )
 
     async def get_status_async(self, template_id: UUID) -> TemplateStatusResponse:
-        """Checks the status of a template asynchronously.
-
-        Args:
-            template_id: The unique ID of the template.
-
-        Returns:
-            The current approval status of the template.
-        """
+        """GET /v1/templates/{id}/status — approval status, asynchronously."""
         return await self._http.arequest(
-            "GET", f"/v1/templates/{template_id}/status",
-            response_model=TemplateStatusResponse
+            "GET",
+            f"{_TEMPLATES}/{template_id}/status",
+            response_model=TemplateStatusResponse,
+        )
+
+    def analytics(
+        self, template_id: UUID, period: str = DEFAULT_ANALYTICS_PERIOD
+    ) -> Dict[str, Any]:
+        """GET /v1/templates/{id}/analytics — delivery and read stats."""
+        return self._http.request(
+            "GET", f"{_TEMPLATES}/{template_id}/analytics", params={"period": period}
+        )
+
+    async def analytics_async(
+        self, template_id: UUID, period: str = DEFAULT_ANALYTICS_PERIOD
+    ) -> Dict[str, Any]:
+        """GET /v1/templates/{id}/analytics — stats, asynchronously."""
+        return await self._http.arequest(
+            "GET", f"{_TEMPLATES}/{template_id}/analytics", params={"period": period}
         )

@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ararahq-sdk"
-version = "1.8.1"
+version = "2.0.0"
 description = "Official Python SDK for the Arara API"
 readme = "README.md"
 requires-python = ">=3.8"
@@ -49,7 +49,7 @@ lint = [
 ]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/tests", "/.github", "/.gemini"]
+exclude = ["/tests", "/.github", "/.gemini", "/.venv", "/htmlcov"]
 
 [tool.hatch.build.targets.wheel]
 packages = ["arara_api_sdk"]
@@ -97,17 +97,3 @@ ignore_missing_imports = true
 "Homepage" = "https://github.com/ararahq/arara-python-sdk"
 "Bug Tracker" = "https://github.com/ararahq/arara-python-sdk/issues"
 
-# Scripts para publicação (Comentados):
-# 
-# 1. Instalar dependências de build:
-# pip install hatch
-#
-# 2. Gerar arquivos de distribuição:
-# hatch build
-#
-# 3. Publicar no PyPI:
-# hatch publish
-#
-# 4. Publicar no GitHub Packages:
-# (Requer configuração de autenticação no ~/.pypirc ou enviando tokens via ENV)
-# hatch publish -r https://pypi.pkg.github.com/ararahq/arara-python-sdk
