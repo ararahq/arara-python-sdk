@@ -7,6 +7,8 @@
 
 SDK oficial da [AraraHQ](https://ararahq.com) para Python: envio de WhatsApp, templates, campanhas, contatos, conversas, números, opt-outs, smart links e carteira, com chamadas síncronas e assíncronas.
 
+AraraHQ: WhatsApp para empresas brasileiras, com atendimento em equipe com IA, campanhas para a base e sistemas conectados pela API.
+
 ## Instalação
 
 ```bash
