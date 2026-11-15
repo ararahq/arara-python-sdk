@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ararahq-sdk"
-version = "2.0.0"
+version = "2.0.1"
 description = "SDK Python da API da AraraHQ. AraraHQ: WhatsApp para empresas brasileiras, com atendimento em equipe com IA, campanhas para a base e sistemas conectados pela API."
 keywords = ["ararahq", "whatsapp", "whatsapp-business", "sdk", "api", "messaging", "brazil"]
 readme = "README.md"

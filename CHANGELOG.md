@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.0.1 - 2026-11-15
+
+Descrição do pacote e README alinhados à descrição atual da AraraHQ. Sem mudança de código.
+
 ## 2.0.0 - 2026-09-24
 
 Alinha o SDK ao contrato real da API por chave. Versão major porque remove recursos e muda retornos.
